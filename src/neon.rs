@@ -211,8 +211,7 @@ macro_rules! simd_sllz_i16 {
 #[target_feature(enable = "neon")]
 #[inline]
 pub unsafe fn simd_broadcasthi_i16(v: Simd) -> Simd {
-    // FIXME
-    v
+    halfsimd_lookup1_i16(v, vreinterpretq_s16_s8(vdupq_n_s8(0x0E)))
 }
 
 #[target_feature(enable = "neon")]
