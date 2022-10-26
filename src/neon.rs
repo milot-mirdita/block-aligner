@@ -281,15 +281,15 @@ macro_rules! simd_suffix_hmax_i16 {
             debug_assert!(2 * $num <= L);
             let mut v = $a;
             if $num > 4 {
-                v = simd_max_i16(v, simd_slli_i128!(v, 8));
+                v = simd_max_i16(v, simd_sl_i16!(v, v, 8));
             }
             if $num > 2 {
-                v = simd_max_i16(v, simd_slli_i128!(v, 4));
+                v = simd_max_i16(v, simd_sl_i16!(v, v, 4));
             }
             if $num > 1 {
-                v = simd_max_i16(v, simd_slli_i128!(v, 2));
+                v = simd_max_i16(v, simd_sl_i16!(v, v, 2));
             }
-            simd_extract_i16!(v, 15)
+            simd_extract_i16!(v, 7)
         }
     };
 }
