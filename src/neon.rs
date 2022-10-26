@@ -7,7 +7,7 @@ pub type TraceType = i32;
 /// Number of 16-bit lanes in a SIMD vector.
 pub const L: usize = 8;
 pub const L_BYTES: usize = L * 2;
-pub const HALFSIMD_MUL: usize = 1;
+pub const HALFSIMD_MUL: usize = 2;
 pub const ZERO: i16 = 1 << 14;
 pub const MIN: i16 = 0;
 
@@ -58,65 +58,6 @@ pub unsafe fn simd_store(ptr: *mut Simd, a: Simd) { vst1q_s16(ptr as *mut i16, a
 #[target_feature(enable = "neon")]
 #[inline]
 pub unsafe fn simd_set1_i16(v: i16) -> Simd { vdupq_n_s16(v) }
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! simd_slli_i16 {
-    ($a:expr, $num:expr) => {
-        {
-            debug_assert!($num < L);
-            #[cfg(target_arch = "aarch64")]
-            use std::arch::aarch64::*;
-            if $num <= 0 {
-                $a
-            } else if $num > 15 {
-                vandq_s16($a, vdupq_n_s16(0))
-            } else {
-                vshlq_n_s16($a, $num & 15)
-            }
-        }
-    };
-}
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! simd_slli_i128 {
-    ($a:expr, $num:expr) => {
-        {
-            debug_assert!(($num as usize) < L);
-            #[cfg(target_arch = "aarch64")]
-            use std::arch::aarch64::*;
-            if $num <= 0 {
-                $a
-            } else if $num > 15 {
-                vdupq_n_s16(0)
-            } else {
-                vreinterpretq_s16_s8(vextq_s8(vdupq_n_s8(0), vreinterpretq_s8_s16($a), 16 - $num))
-            }
-        }
-    };
-}
-
-#[macro_export]
-#[doc(hidden)]
-macro_rules! simd_srli_i128 {
-    ($a:expr, $num:expr) => {
-        {
-            debug_assert!($num < L);
-            #[cfg(target_arch = "aarch64")]
-            use std::arch::aarch64::*;
-            if ($num < 0) || ($num > 15) {
-                vdupq_n_s16(0)
-            } else if ($num & 15) != 0 {
-                vreinterpretq_s16_s8(vextq_s8(vreinterpretq_s8_s16($a), vdupq_n_s8(0), $num as i32))
-            } else {
-                vreinterpretq_s16_s8(vextq_s8(vreinterpretq_s8_s16($a), vdupq_n_s8(0), ($num & 15) as i32))
-            }
-        }
-    };
-}
-
-
 
 #[macro_export]
 #[doc(hidden)]
@@ -239,13 +180,13 @@ macro_rules! simd_prefix_hadd_i16 {
             debug_assert!(2 * $num <= L);
             let mut v = simd_subs_i16($a, simd_set1_i16(ZERO));
             if $num > 4 {
-                v = simd_adds_i16(v, simd_srli_i128!(v, 8));
+                v = simd_adds_i16(v, simd_sr_i16!(v, v, 4));
             }
             if $num > 2 {
-                v = simd_adds_i16(v, simd_srli_i128!(v, 4));
+                v = simd_adds_i16(v, simd_sr_i16!(v, v, 2));
             }
             if $num > 1 {
-                v = simd_adds_i16(v, simd_srli_i128!(v, 2));
+                v = simd_adds_i16(v, simd_sr_i16!(v, v, 1));
             }
             simd_extract_i16!(v, 0)
         }
@@ -260,13 +201,13 @@ macro_rules! simd_prefix_hmax_i16 {
             debug_assert!(2 * $num <= L);
             let mut v = $a;
             if $num > 4 {
-                v = simd_max_i16(v, simd_srli_i128!(v, 8));
+                v = simd_max_i16(v, simd_sr_i16!(v, v, 4));
             }
             if $num > 2 {
-                v = simd_max_i16(v, simd_srli_i128!(v, 4));
+                v = simd_max_i16(v, simd_sr_i16!(v, v, 2));
             }
             if $num > 1 {
-                v = simd_max_i16(v, simd_srli_i128!(v, 2));
+                v = simd_max_i16(v, simd_sr_i16!(v, v, 1));
             }
             simd_extract_i16!(v, 0)
         }
@@ -281,13 +222,13 @@ macro_rules! simd_suffix_hmax_i16 {
             debug_assert!(2 * $num <= L);
             let mut v = $a;
             if $num > 4 {
-                v = simd_max_i16(v, simd_sl_i16!(v, v, 8));
-            }
-            if $num > 2 {
                 v = simd_max_i16(v, simd_sl_i16!(v, v, 4));
             }
-            if $num > 1 {
+            if $num > 2 {
                 v = simd_max_i16(v, simd_sl_i16!(v, v, 2));
+            }
+            if $num > 1 {
+                v = simd_max_i16(v, simd_sl_i16!(v, v, 1));
             }
             simd_extract_i16!(v, 7)
         }
@@ -346,10 +287,10 @@ pub unsafe fn simd_prefix_scan_i16(R_max: Simd, gap_cost: Simd, _gap_cost_lane: 
     shift1 = simd_adds_i16(shift1, gap_cost);
     shift1 = simd_max_i16(R_max, shift1);
     let mut shift2 = simd_sllz_i16!(shift1, 2);
-    shift2 = simd_adds_i16(shift2, simd_slli_i16!(gap_cost, 1));
+    shift2 = simd_adds_i16(shift2, vshlq_s16(gap_cost, vdupq_n_s16(1)));
     shift2 = simd_max_i16(shift1, shift2);
     let mut shift4 = simd_sllz_i16!(shift2, 4);
-    shift4 = simd_adds_i16(shift4, simd_slli_i16!(gap_cost, 2));
+    shift4 = simd_adds_i16(shift4, vshlq_s16(gap_cost, vdupq_n_s16(2)));
     shift4 = simd_max_i16(shift2, shift4);
 
     shift4
@@ -360,7 +301,7 @@ pub unsafe fn simd_prefix_scan_i16(R_max: Simd, gap_cost: Simd, _gap_cost_lane: 
 pub unsafe fn halfsimd_lookup2_i16(lut1: HalfSimd, lut2: HalfSimd, v: HalfSimd) -> Simd {
     let a = vqtbl1q_s8(vreinterpretq_s8_s16(lut1), vandq_u8(vreinterpretq_u8_s16(v), vdupq_n_u8(0x8F)));
     let b = vqtbl1q_s8(vreinterpretq_s8_s16(lut2), vandq_u8(vreinterpretq_u8_s16(v), vdupq_n_u8(0x8F)));
-    let mask = simd_slli_i16!(v, 3);
+    let mask = vshlq_s16(v, vdupq_n_s16(3));
     let s8x16 = vreinterpretq_s8_s16(simd_blend_i8(vreinterpretq_s16_s8(a), vreinterpretq_s16_s8(b), mask));
     vmovl_s8(vget_low_s8(s8x16))
 }
