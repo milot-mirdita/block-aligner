@@ -172,9 +172,9 @@ macro_rules! simd_sl_i16 {
             if $num > 31 {
                 vdupq_n_s16(0)
             } else if $num > 15 {
-                vreinterpretq_s16_s8(vextq_s8(vreinterpretq_s8_s16($a), vdupq_n_s8(0), (((L - (2 * $num)) as i32) & 15)))
+                vreinterpretq_s16_s8(vextq_s8(vreinterpretq_s8_s16($a), vdupq_n_s8(0), ((((L * 2) - (2 * $num)) as i32) & 15)))
             } else {
-                vreinterpretq_s16_s8(vextq_s8(vreinterpretq_s8_s16($b), vreinterpretq_s8_s16($a), (((L - (2 * $num)) as i32) & 15)))
+                vreinterpretq_s16_s8(vextq_s8(vreinterpretq_s8_s16($b), vreinterpretq_s8_s16($a), ((((L * 2) - (2 * $num)) as i32) & 15)))
             }
         }
     };
